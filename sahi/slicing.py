@@ -51,6 +51,9 @@ class BasePilImageManipulator():
 
     @property
     def size(self):
+        """
+        Must obey PIL conventions, that is, (Width, Height)
+        """
         return self.pil_image.size
 
     def crop(self, slice_bbox):
