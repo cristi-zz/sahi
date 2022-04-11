@@ -25,6 +25,42 @@ logging.basicConfig(
 )
 
 MAX_WORKERS = 20
+class BasePilImageManipulator():
+    """
+    Base image class for loading, cropping and saving images
+    using non (PIL, skimage, numpy) formats.
+
+    The base class relies on sahi.utils.cv.read_image_as_pil that reads/converts an image
+    to PIL.Image.
+
+    A user would want to implement their own open/crop/save functionality using
+    the library of their choice.
+
+    The slicing library will construct the image with a filename, order cropping with
+    a bounding box and indicate a destination path for saving. It will not touch the
+    actual image pixels.
+
+    """
+
+    def __init__(self, filename):
+        self.filename = filename
+        self.pil_image = None
+
+    def read_image(self):
+        self.pil_image = read_image_as_pil(self.filename)
+
+    @property
+    def size(self):
+        return self.pil_image.size
+
+    def crop(self, slice_bbox):
+        crop_image = self.pil_image.crop(slice_bbox)
+        base_img = BasePilImageManipulator("")
+        base_img.pil_image = crop_image
+        return base_img
+
+    def save(self, dest_path):
+        self.pil_image.save(dest_path)
 
 
 def get_slice_bboxes(
@@ -236,6 +272,7 @@ def slice_image(
     out_ext: Optional[str] = None,
     verbose: bool = False,
     bbox_generator = None,
+    image_manipulation_class = None,
 ) -> SliceImageResult:
 
     """Slice a large image into smaller windows. If output_file_name is given export
@@ -276,8 +313,10 @@ def slice_image(
     # define verboseprint
     verboselog = logger.info if verbose else lambda *a, **k: None
 
-    def _export_single_slice(image: np.ndarray, output_dir: str, slice_file_name: str):
-        image_pil = read_image_as_pil(image)
+    if image_manipulation_class is None:
+        image_manipulation_class = BasePilImageManipulator
+
+    def _export_single_slice(image_pil, output_dir: str, slice_file_name: str):
         slice_file_path = str(Path(output_dir) / slice_file_name)
         # export sliced image
         image_pil.save(slice_file_path)
@@ -288,7 +327,8 @@ def slice_image(
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # read image
-    image_pil = read_image_as_pil(image)
+    image_pil = image_manipulation_class(image)
+    image_pil.read_image()
     verboselog("image.shape: " + str(image_pil.size))
 
     image_width, image_height = image_pil.size
@@ -348,7 +388,7 @@ def slice_image(
 
         # create sliced image and append to sliced_image_result
         sliced_image = SlicedImage(
-            image=np.asarray(image_pil_slice),
+            image=image_pil_slice,
             coco_image=coco_image,
             starting_pixel=[slice_bbox[0], slice_bbox[1]],
         )
@@ -356,13 +396,13 @@ def slice_image(
 
     # export slices if output directory is provided
     if output_file_name and output_dir:
-        conc_exec = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS)
-        conc_exec.map(
-            _export_single_slice,
-            sliced_image_result.images,
-            [output_dir] * len(sliced_image_result),
-            sliced_image_result.filenames,
-        )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as conc_exec:
+            conc_exec.map(
+                _export_single_slice,
+                sliced_image_result.images,
+                [output_dir] * len(sliced_image_result),
+                sliced_image_result.filenames,
+            )
 
     verboselog(
         "Num slices: " + str(n_ims) + " slice_height: " + str(slice_height) + " slice_width: " + str(slice_width),
@@ -385,6 +425,7 @@ def slice_coco(
     out_ext: Optional[str] = None,
     verbose: bool = False,
     bbox_generator = None,
+    image_manipulation_class = None,
 ) -> List[Union[Dict, str]]:
 
     """
@@ -447,6 +488,7 @@ def slice_coco(
                 out_ext=out_ext,
                 verbose=verbose,
                 bbox_generator=bbox_generator,
+                image_manipulation_class=image_manipulation_class,
             )
             # append slice outputs
             sliced_coco_images.extend(slice_image_result.coco_images)

@@ -6,8 +6,10 @@ import unittest
 import numpy as np
 from PIL import Image
 from typing import List
+from pathlib import Path
+import os
 
-from sahi.slicing import slice_coco, slice_image
+from sahi.slicing import slice_coco, slice_image, BasePilImageManipulator
 from sahi.utils.coco import Coco
 from sahi.utils.cv import read_image
 
@@ -174,7 +176,7 @@ class TestSlicing(unittest.TestCase):
                           slice_width: int = 512,
                           overlap_height_ratio: float = 0.2,
                           overlap_width_ratio: float = 0.2,
-                          vertical_split_ratio = 0.5
+                          vertical_split_ratio: float = 0.8,
                           ) -> List[List[int]]:
             slice_bboxes = []
             vert_end = int(image_width * vertical_split_ratio)
@@ -184,11 +186,14 @@ class TestSlicing(unittest.TestCase):
             slice_bboxes.append(right_slice)
             return slice_bboxes
 
-        coco_annotation_file_path = "data/coco_utils/terrain1_coco.json"
-        image_dir = "data/coco_utils/"
+        crt_dir = Path(os.getcwd())
+
+        coco_annotation_file_path = crt_dir / "data/coco_utils/terrain1_coco.json"
+        image_dir = crt_dir / "data/coco_utils/"
         output_coco_annotation_file_name = "test_out"
-        output_dir = "data/coco_utils/test_out/"
-        ignore_negative_samples = True
+        output_dir = crt_dir / "data/coco_utils/test_out/"
+        ignore_negative_samples = False
+        shutil.rmtree(output_dir, ignore_errors=True)
         processed_coco_dict, _ = slice_coco(
             coco_annotation_file_path=coco_annotation_file_path,
             image_dir=image_dir,
@@ -203,12 +208,17 @@ class TestSlicing(unittest.TestCase):
             out_ext=".png",
             verbose=False,
             bbox_generator=custom_slicer,
+            image_manipulation_class=BasePilImageManipulator
         )
 
         self.assertEqual(len(processed_coco_dict["images"]), 2)
         total_width = processed_coco_dict["images"][0]["width"] +\
                       processed_coco_dict["images"][1]["width"]
         self.assertEqual(total_width, 2048)
+        for img_meta in processed_coco_dict["images"]:
+            img = Image.open(str(crt_dir / output_dir / img_meta["file_name"]))
+            self.assertEqual(img.size[0], img_meta["width"])
+            self.assertEqual(img.size[1], img_meta["height"])
         # self.assertEqual(processed_coco_dict["images"][1]["height"], 512)
         # self.assertEqual(processed_coco_dict["images"][1]["width"], 512)
         # self.assertEqual(len(processed_coco_dict["annotations"]), 14)
