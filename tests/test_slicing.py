@@ -5,6 +5,7 @@ import unittest
 
 import numpy as np
 from PIL import Image
+from typing import List
 
 from sahi.slicing import slice_coco, slice_image
 from sahi.utils.coco import Coco
@@ -161,6 +162,64 @@ class TestSlicing(unittest.TestCase):
             coco_dict["annotations"][2]["bbox"],
             [340, 204, 73, 171],
         )
+
+        shutil.rmtree(output_dir, ignore_errors=True)
+
+    def test_test_slice_coco_with_callbacks(self):
+        import shutil
+
+        def custom_slicer(image_height: int,
+                          image_width: int,
+                          slice_height: int = 512,
+                          slice_width: int = 512,
+                          overlap_height_ratio: float = 0.2,
+                          overlap_width_ratio: float = 0.2,
+                          vertical_split_ratio = 0.5
+                          ) -> List[List[int]]:
+            slice_bboxes = []
+            vert_end = int(image_width * vertical_split_ratio)
+            left_slice = [0, 0, vert_end, image_height]
+            right_slice = [vert_end, 0, image_width, image_height]
+            slice_bboxes.append(left_slice)
+            slice_bboxes.append(right_slice)
+            return slice_bboxes
+
+        coco_annotation_file_path = "data/coco_utils/terrain1_coco.json"
+        image_dir = "data/coco_utils/"
+        output_coco_annotation_file_name = "test_out"
+        output_dir = "data/coco_utils/test_out/"
+        ignore_negative_samples = True
+        processed_coco_dict, _ = slice_coco(
+            coco_annotation_file_path=coco_annotation_file_path,
+            image_dir=image_dir,
+            output_coco_annotation_file_name=output_coco_annotation_file_name,
+            output_dir=output_dir,
+            ignore_negative_samples=ignore_negative_samples,
+            slice_height=512,
+            slice_width=512,
+            overlap_height_ratio=0.1,
+            overlap_width_ratio=0.4,
+            min_area_ratio=0.1,
+            out_ext=".png",
+            verbose=False,
+            bbox_generator=custom_slicer,
+        )
+
+        self.assertEqual(len(processed_coco_dict["images"]), 2)
+        total_width = processed_coco_dict["images"][0]["width"] +\
+                      processed_coco_dict["images"][1]["width"]
+        self.assertEqual(total_width, 2048)
+        # self.assertEqual(processed_coco_dict["images"][1]["height"], 512)
+        # self.assertEqual(processed_coco_dict["images"][1]["width"], 512)
+        # self.assertEqual(len(processed_coco_dict["annotations"]), 14)
+        # self.assertEqual(processed_coco_dict["annotations"][2]["id"], 3)
+        # self.assertEqual(processed_coco_dict["annotations"][2]["image_id"], 2)
+        # self.assertEqual(processed_coco_dict["annotations"][2]["category_id"], 1)
+        # self.assertEqual(processed_coco_dict["annotations"][2]["area"], 12483)
+        # self.assertEqual(
+        #     processed_coco_dict["annotations"][2]["bbox"],
+        #     [340, 204, 73, 171],
+        # )
 
         shutil.rmtree(output_dir, ignore_errors=True)
 

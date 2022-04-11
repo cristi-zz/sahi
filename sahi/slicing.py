@@ -32,8 +32,8 @@ def get_slice_bboxes(
     image_width: int,
     slice_height: int = 512,
     slice_width: int = 512,
-    overlap_height_ratio: int = 0.2,
-    overlap_width_ratio: int = 0.2,
+    overlap_height_ratio: float = 0.2,
+    overlap_width_ratio: float = 0.2,
 ) -> List[List[int]]:
     """Slices `image_pil` in crops.
     Corner values of each slice will be generated using the `slice_height`,
@@ -235,6 +235,7 @@ def slice_image(
     min_area_ratio: float = 0.1,
     out_ext: Optional[str] = None,
     verbose: bool = False,
+    bbox_generator = None,
 ) -> SliceImageResult:
 
     """Slice a large image into smaller windows. If output_file_name is given export
@@ -293,7 +294,10 @@ def slice_image(
     image_width, image_height = image_pil.size
     if not (image_width != 0 and image_height != 0):
         raise RuntimeError(f"invalid image size: {image_pil.size} for 'slice_image'.")
-    slice_bboxes = get_slice_bboxes(
+    if bbox_generator is None:
+        bbox_generator = get_slice_bboxes
+
+    slice_bboxes = bbox_generator(
         image_height=image_height,
         image_width=image_width,
         slice_height=slice_height,
@@ -380,6 +384,7 @@ def slice_coco(
     min_area_ratio: float = 0.1,
     out_ext: Optional[str] = None,
     verbose: bool = False,
+    bbox_generator = None,
 ) -> List[Union[Dict, str]]:
 
     """
@@ -441,6 +446,7 @@ def slice_coco(
                 min_area_ratio=min_area_ratio,
                 out_ext=out_ext,
                 verbose=verbose,
+                bbox_generator=bbox_generator,
             )
             # append slice outputs
             sliced_coco_images.extend(slice_image_result.coco_images)
