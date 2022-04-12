@@ -57,6 +57,9 @@ class BasePilImageManipulator():
         return self.pil_image.size
 
     def crop(self, slice_bbox):
+        """
+         left, upper, right, and lower
+        """
         crop_image = self.pil_image.crop(slice_bbox)
         base_img = BasePilImageManipulator("")
         base_img.pil_image = crop_image
